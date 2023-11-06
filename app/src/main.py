@@ -14,11 +14,12 @@
 
 """A sample skeleton vehicle app."""
 
-import pymysql
 import asyncio
 import json
 import logging
 import signal
+from typing import Deque, Tuple
+from collections import deque
 from datetime import datetime, timedelta
 from vehicle import Vehicle, vehicle  # type: ignore
 from velocitas_sdk.util.log import (  # type: ignore
@@ -38,9 +39,10 @@ GET_SPEED_REQUEST_TOPIC = "sampleapp/getSpeed"
 GET_SPEED_RESPONSE_TOPIC = "sampleapp/getSpeed/response"
 DATABROKER_SUBSCRIPTION_TOPIC = "sampleapp/currentSpeed"
 
-GET_LATERAL_REQUEST_TOPIC = "sampleapp/getLateral"
-GET_LATERAL_RESPONSE_TOPIC = "sampleapp/getLateral/response"
-DATABROKER_LATERAL_SUBSCRIPTION_TOPIC = "sampleapp/currentLateral"
+
+acceleration_data: Deque[Tuple[datetime, float]] = deque(maxlen=5000)
+
+ACCELERATION_THRESHOLD = 50
 
 
 def calculate_acceleration(v_initial, v_final, time):
@@ -49,14 +51,13 @@ def calculate_acceleration(v_initial, v_final, time):
     if time <= 0:
         raise ValueError("Time interval must be greater than zero.")
     acceleration = (v_final - v_initial) / time
+    print(acceleration)
     return acceleration
 
 
-connection = pymysql.connect(host='localhost',
-                             user='root',
-                             passwd='1234',
-                             db='acceleration')
-cursor = connection.cursor()
+def check_for_anomalies(acceleration_value: float) -> bool:
+    """Check if the acceleration value indicates an anomaly (e.g., car accident)."""
+    return abs(acceleration_value) > ACCELERATION_THRESHOLD
 
 
 class SampleApp(VehicleApp):
@@ -78,8 +79,8 @@ class SampleApp(VehicleApp):
         # SampleApp inherits from VehicleApp.
         super().__init__()
         self.Vehicle = vehicle_client
-        self.previous_speed = None
         self.previous_time = datetime.now().timestamp()
+        self.previous_speed = 0.0
 
     async def on_start(self):
         """Run when the vehicle app starts"""
@@ -87,47 +88,6 @@ class SampleApp(VehicleApp):
         # Vehicle DataBroker is ready.
         # Here you can subscribe for the Vehicle Signals update (e.g. Vehicle Speed).
         await self.Vehicle.Speed.subscribe(self.on_speed_change)
-        await self.Vehicle.Acceleration.Lateral.subscribe(self.on_acceleration_Y_change)
-
-    async def on_acceleration_Y_change(self, data: DataPointReply):
-        vehicle_acc_y = data.get(self.Vehicle.Acceleration.Lateral).value
-        await self.publish_event(
-            "sampleapp/currentLateral",
-            json.dumps({"acc_y": vehicle_acc_y}),
-        )
-
-    @subscribe_topic("sampleapp/getLateral")
-    async def on_get_lateral_request_received(self, data: str) -> None:
-        """The subscribe_topic annotation is used to subscribe for incoming
-        PubSub events, e.g. MQTT event for GET_SPEED_REQUEST_TOPIC.
-        """
-
-        # Use the logger with the preferred log level (e.g. debug, info, error, etc)
-        logger.debug(
-            "PubSub event for the Topic: %s -> is received with the data: %s",
-            "sampleapp/getLateral",
-            data,
-        )
-
-        # Getting current speed from VehicleDataBroker using the DataPoint getter.
-        vehicle_acc_y = (await self.Vehicle.Acceleration.Lateral.get()).value
-
-        # Do anything with the speed value.
-        # Example:
-        # - Publishes the vehicle speed to MQTT topic (i.e. GET_SPEED_RESPONSE_TOPIC).
-        await self.publish_event(
-            "sampleapp/getLateral/response",
-            json.dumps(
-                {
-                    "result": {
-                        "status": 0,
-                        "message": f"""Current acc_y = {vehicle_acc_y}""",
-                    },
-                }
-            ),
-        )
-
-########################################################################################
 
     async def on_speed_change(self, data: DataPointReply):
         """The on_speed_change callback, this will be executed when receiving a new
@@ -137,40 +97,35 @@ class SampleApp(VehicleApp):
         # the same callback.
         vehicle_speed = data.get(self.Vehicle.Speed).value
         current_time = datetime.now().timestamp()
+        # calculate acc
+        # send sql
 
         if self.previous_time:
             time_diff = current_time - self.previous_time
             acceleration = calculate_acceleration(
                 self.previous_speed, vehicle_speed, time_diff
             )
-            print(" ")
-            print(self.previous_speed, vehicle_speed, time_diff)
-            print(" ")
-            try:
-                with connection.cursor() as cursor:
-                    # First, delete old data that's more than 5 minutes old
-                    delete_sql = "DELETE FROM acceleration_data WHERE timestamp < %s"
-                    five_minutes_ago = datetime.now() - timedelta(minutes=5)
-                    cursor.execute(delete_sql, (five_minutes_ago.strftime
-                                                ('%Y-%m-%d %H:%M:%S'),))
-                    # Then, insert the new data
-                    insert_sql = "INSERT INTO acceleration_data (timestamp, \
-                        acceleration) VALUES (%s, %s)"
-                    cursor.execute(insert_sql, (datetime.now().strftime
-                                                ('%Y-%m-%d %H:%M:%S'), acceleration))
+            # Add the new acceleration data to the deque
+            acceleration_data.append((datetime.now(), acceleration))
+            print("Append!")
+            # Remove data older than 5 minutes
+            five_minutes_ago = datetime.now() - timedelta(minutes=5)
+            while acceleration_data and acceleration_data[0][0] < five_minutes_ago:
+                acceleration_data.popleft()
+                print("Pop!")
+            if check_for_anomalies(acceleration):
+                print(f"Anomaly detected at {current_time}: Car accident may have \
+                    happened.")
 
-                connection.commit()
-            except Exception as e:
-                logger.error(f"Failed to insert data into database: {e}")
-            finally:
-                pass
-
+        # Do anything with the received value.
+        # Example:
+        # - Publishes current speed to MQTT Topic (i.e. DATABROKER_SUBSCRIPTION_TOPIC).
         await self.publish_event(
             DATABROKER_SUBSCRIPTION_TOPIC,
             json.dumps({"speed": vehicle_speed}),
         )
-        self.previous_speed = vehicle_speed
         self.previous_time = current_time
+        self.previous_speed = vehicle_speed
 
     @subscribe_topic(GET_SPEED_REQUEST_TOPIC)
     async def on_get_speed_request_received(self, data: str) -> None:
@@ -207,8 +162,6 @@ class SampleApp(VehicleApp):
 async def main():
     """Main function"""
     logger.info("Starting SampleApp...")
-    cursor.execute("ALTER TABLE acceleration_data AUTO_INCREMENT = 1")
-
     # Constructing SampleApp and running it.
     vehicle_app = SampleApp(vehicle)
     await vehicle_app.run()
