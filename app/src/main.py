@@ -51,7 +51,7 @@ def calculate_acceleration(v_initial, v_final, time):
     if time <= 0:
         raise ValueError("Time interval must be greater than zero.")
     acceleration = (v_final - v_initial) / time
-    print(acceleration)
+    #print(acceleration)
     return acceleration
 
 
@@ -107,12 +107,12 @@ class SampleApp(VehicleApp):
             )
             # Add the new acceleration data to the deque
             acceleration_data.append((datetime.now(), acceleration))
-            print("Append!")
+            # print("Append!")
             # Remove data older than 5 minutes
             five_minutes_ago = datetime.now() - timedelta(minutes=5)
             while acceleration_data and acceleration_data[0][0] < five_minutes_ago:
                 acceleration_data.popleft()
-                print("Pop!")
+                # print("Pop!")
             if check_for_anomalies(acceleration):
                 print(f"Anomaly detected at {current_time}: Car accident may have \
                     happened.")
