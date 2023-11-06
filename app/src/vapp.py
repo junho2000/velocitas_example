@@ -54,7 +54,10 @@ class SeatAdjusterApp(VehicleApp):
         await self.Vehicle.Cabin.Seat.Row1.Pos1.Position.subscribe(
             self.on_seat_position_changed
         )
+        self.vehicle_speed = await self.Vehicle.Speed.get()
+        self.DriverSeatPosition = await self.Vehicle.Cabin.Seat.Row1.Pos1.Position.get()
 
+    # callback function
     async def on_seat_position_changed(self, data: DataPointReply):
         response_topic = "seatadjuster/currentPosition"
         await self.publish_event(
