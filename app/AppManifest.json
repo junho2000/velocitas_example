@@ -1,6 +1,6 @@
 {
     "manifestVersion": "v3",
-    "name": "seatadjuster",
+    "name": "carcrash",
     "interfaces": [
         {
             "type": "vehicle-signal-interface",
@@ -24,11 +24,11 @@
             "type": "pubsub",
             "config": {
                 "reads": [
-                    "seatadjuster/setPosition/request"
+                    "carcrash/setPosition/request"
                 ],
                 "writes": [
-                    "seatadjuster/currentPosition",
-                    "seatadjuster/setPosition/response"
+                    "carcrash/currentPosition",
+                    "carcrash/setPosition/response"
                 ]
             }
         }

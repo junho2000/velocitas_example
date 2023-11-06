@@ -56,6 +56,7 @@ connection = pymysql.connect(host='localhost',
                              user='root',
                              passwd='1234',
                              db='acceleration')
+cursor = connection.cursor()
 
 
 class SampleApp(VehicleApp):
@@ -206,6 +207,8 @@ class SampleApp(VehicleApp):
 async def main():
     """Main function"""
     logger.info("Starting SampleApp...")
+    cursor.execute("ALTER TABLE acceleration_data AUTO_INCREMENT = 1")
+
     # Constructing SampleApp and running it.
     vehicle_app = SampleApp(vehicle)
     await vehicle_app.run()
