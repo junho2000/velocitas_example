@@ -81,6 +81,8 @@ class SampleApp(VehicleApp):
         self.Vehicle = vehicle_client
         self.previous_time = datetime.now().timestamp()
         self.previous_speed = 0.0
+        print("hello world")
+        
 
     async def on_start(self):
         """Run when the vehicle app starts"""
