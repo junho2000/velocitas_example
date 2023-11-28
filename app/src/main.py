@@ -51,7 +51,7 @@ def calculate_acceleration(v_initial, v_final, time):
     if time <= 0:
         raise ValueError("Time interval must be greater than zero.")
     acceleration = (v_final - v_initial) / time
-    #print(acceleration)
+    # print(acceleration)
     return acceleration
 
 
@@ -97,8 +97,6 @@ class SampleApp(VehicleApp):
         # the same callback.
         vehicle_speed = data.get(self.Vehicle.Speed).value
         current_time = datetime.now().timestamp()
-        # calculate acc
-        # send sql
 
         if self.previous_time:
             time_diff = current_time - self.previous_time
@@ -116,7 +114,6 @@ class SampleApp(VehicleApp):
             if check_for_anomalies(acceleration):
                 print(f"Anomaly detected at {current_time}: Car accident may have \
                     happened.")
-
         # Do anything with the received value.
         # Example:
         # - Publishes current speed to MQTT Topic (i.e. DATABROKER_SUBSCRIPTION_TOPIC).
